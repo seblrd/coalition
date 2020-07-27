@@ -17,15 +17,16 @@
 
 
 from qarnot import get_url, raise_on_error
-from qarnot.disk import Disk
-from qarnot.task import Task
-from qarnot.exceptions import *
+from disk import Disk
+from task import Task
+from exceptions import *
 import requests
 import sys
 import warnings
 import os
 from json import dumps as json_dumps
 from requests.exceptions import ConnectionError
+
 if sys.version_info[0] >= 3:  # module renamed in py3
     import configparser as config  # pylint: disable=import-error
 else:
@@ -36,10 +37,19 @@ else:
 # class #
 #########
 
+
 class Connection(object):
     """Represents the couple cluster/user to which submit tasks.
     """
-    def __init__(self, fileconf=None, client_token=None, cluster_url=None, cluster_unsafe=False, cluster_timeout=None):
+
+    def __init__(
+        self,
+        fileconf=None,
+        client_token=None,
+        cluster_url=None,
+        cluster_unsafe=False,
+        cluster_timeout=None,
+    ):
         """Create a connection to a cluster with given config file, options or environment variables.
         Available environment variable are
         `QARNOT_CLUSTER_URL`, `QARNOT_CLUSTER_UNSAFE`, `QARNOT_CLUSTER_TIMEOUT` and `QARNOT_CLIENT_TOKEN`.
@@ -69,13 +79,15 @@ class Connection(object):
 
         if fileconf is not None:
             if isinstance(fileconf, dict):
-                warnings.warn("Dict config should be replaced by constructor explicit arguments.")
+                warnings.warn(
+                    "Dict config should be replaced by constructor explicit arguments."
+                )
                 self.cluster = None
-                if fileconf.get('cluster_url'):
-                    self.cluster = fileconf.get('cluster_url')
-                auth = fileconf.get('client_auth')
-                self.timeout = fileconf.get('cluster_timeout')
-                if fileconf.get('cluster_unsafe'):
+                if fileconf.get("cluster_url"):
+                    self.cluster = fileconf.get("cluster_url")
+                auth = fileconf.get("client_auth")
+                self.timeout = fileconf.get("cluster_timeout")
+                if fileconf.get("cluster_unsafe"):
                     self._http.verify = False
             else:
                 cfg = config.ConfigParser()
@@ -83,21 +95,22 @@ class Connection(object):
                     cfg.readfp(cfgfile)
 
                     self.cluster = None
-                    if cfg.has_option('cluster', 'url'):
-                        self.cluster = cfg.get('cluster', 'url')
+                    if cfg.has_option("cluster", "url"):
+                        self.cluster = cfg.get("cluster", "url")
 
-                    if cfg.has_option('client', 'token'):
-                        auth = cfg.get('client', 'token')
-                    elif cfg.has_option('client', 'auth'):
-                        warnings.warn('auth is deprecated, use token instead.')
-                        auth = cfg.get('client', 'auth')
+                    if cfg.has_option("client", "token"):
+                        auth = cfg.get("client", "token")
+                    elif cfg.has_option("client", "auth"):
+                        warnings.warn("auth is deprecated, use token instead.")
+                        auth = cfg.get("client", "auth")
                     else:
                         auth = None
                     self.timeout = None
-                    if cfg.has_option('cluster', 'timeout'):
-                        self.timeout = cfg.getint('cluster', 'timeout')
-                    if cfg.has_option('cluster', 'unsafe') \
-                       and cfg.getboolean('cluster', 'unsafe'):
+                    if cfg.has_option("cluster", "timeout"):
+                        self.timeout = cfg.getint("cluster", "timeout")
+                    if cfg.has_option("cluster", "unsafe") and cfg.getboolean(
+                        "cluster", "unsafe"
+                    ):
                         self._http.verify = False
         else:
             self.cluster = cluster_url
@@ -112,7 +125,11 @@ class Connection(object):
             auth = os.getenv("QARNOT_CLIENT_TOKEN")
 
         if os.getenv("QARNOT_CLUSTER_UNSAFE") is not None:
-            self._http.verify = not os.getenv("QARNOT_CLUSTER_UNSAFE") in ["true", "True", "1"]
+            self._http.verify = not os.getenv("QARNOT_CLUSTER_UNSAFE") in [
+                "true",
+                "True",
+                "1",
+            ]
 
         if os.getenv("QARNOT_CLUSTER_TIMEOUT") is not None:
             self.timeout = int(os.getenv("QARNOT_CLUSTER_TIMEOUT"))
@@ -123,7 +140,7 @@ class Connection(object):
 
         if self.cluster is None:
             self.cluster = "https://api.qarnot.com"
-        resp = self._get('/')
+        resp = self._get("/")
         raise_on_error(resp)
 
     def _get(self, url, **kwargs):
@@ -142,14 +159,13 @@ class Connection(object):
         """
         while True:
             try:
-                ret = self._http.get(self.cluster + url, timeout=self.timeout,
-                                     **kwargs)
+                ret = self._http.get(self.cluster + url, timeout=self.timeout, **kwargs)
                 if ret.status_code == 401:
                     raise UnauthorizedException()
                 return ret
             except ConnectionError as exception:
 
-                if str(exception) == "('Connection aborted.', BadStatusLine(\"\'\'\",))":
+                if str(exception) == "('Connection aborted.', BadStatusLine(\"''\",))":
                     pass
                 else:
                     raise
@@ -172,17 +188,18 @@ class Connection(object):
         while True:
             try:
                 if json is not None:
-                    if 'headers' not in kwargs:
-                        kwargs['headers'] = dict()
-                    kwargs['headers']['Content-Type'] = 'application/json'
-                    kwargs['data'] = json_dumps(json)
-                ret = self._http.patch(self.cluster + url,
-                                       timeout=self.timeout, **kwargs)
+                    if "headers" not in kwargs:
+                        kwargs["headers"] = dict()
+                    kwargs["headers"]["Content-Type"] = "application/json"
+                    kwargs["data"] = json_dumps(json)
+                ret = self._http.patch(
+                    self.cluster + url, timeout=self.timeout, **kwargs
+                )
                 if ret.status_code == 401:
                     raise UnauthorizedException()
                 return ret
             except ConnectionError as exception:
-                if str(exception) == "('Connection aborted.', BadStatusLine(\"\'\'\",))":
+                if str(exception) == "('Connection aborted.', BadStatusLine(\"''\",))":
                     pass
                 else:
                     raise
@@ -205,17 +222,18 @@ class Connection(object):
         while True:
             try:
                 if json is not None:
-                    if 'headers' not in kwargs:
-                        kwargs['headers'] = dict()
-                    kwargs['headers']['Content-Type'] = 'application/json'
-                    kwargs['data'] = json_dumps(json)
-                ret = self._http.post(self.cluster + url,
-                                      timeout=self.timeout, *args, **kwargs)
+                    if "headers" not in kwargs:
+                        kwargs["headers"] = dict()
+                    kwargs["headers"]["Content-Type"] = "application/json"
+                    kwargs["data"] = json_dumps(json)
+                ret = self._http.post(
+                    self.cluster + url, timeout=self.timeout, *args, **kwargs
+                )
                 if ret.status_code == 401:
                     raise UnauthorizedException()
                 return ret
             except ConnectionError as exception:
-                if str(exception) == "('Connection aborted.', BadStatusLine(\"\'\'\",))":
+                if str(exception) == "('Connection aborted.', BadStatusLine(\"''\",))":
                     pass
                 else:
                     raise
@@ -237,13 +255,14 @@ class Connection(object):
 
         while True:
             try:
-                ret = self._http.delete(self.cluster + url,
-                                        timeout=self.timeout, **kwargs)
+                ret = self._http.delete(
+                    self.cluster + url, timeout=self.timeout, **kwargs
+                )
                 if ret.status_code == 401:
                     raise UnauthorizedException()
                 return ret
             except ConnectionError as exception:
-                if str(exception) == "('Connection aborted.', BadStatusLine(\"\'\'\",))":
+                if str(exception) == "('Connection aborted.', BadStatusLine(\"''\",))":
                     pass
                 else:
                     raise
@@ -253,17 +272,16 @@ class Connection(object):
         while True:
             try:
                 if json is not None:
-                    if 'headers' not in kwargs:
-                        kwargs['headers'] = dict()
-                    kwargs['headers']['Content-Type'] = 'application/json'
-                    kwargs['data'] = json_dumps(json)
-                ret = self._http.put(self.cluster + url,
-                                     timeout=self.timeout, **kwargs)
+                    if "headers" not in kwargs:
+                        kwargs["headers"] = dict()
+                    kwargs["headers"]["Content-Type"] = "application/json"
+                    kwargs["data"] = json_dumps(json)
+                ret = self._http.put(self.cluster + url, timeout=self.timeout, **kwargs)
                 if ret.status_code == 401:
                     raise UnauthorizedException()
                 return ret
             except ConnectionError as exception:
-                if str(exception) == "('Connection aborted.', BadStatusLine(\"\'\'\",))":
+                if str(exception) == "('Connection aborted.', BadStatusLine(\"''\",))":
                     pass
                 else:
                     raise
@@ -278,7 +296,7 @@ class Connection(object):
         :raises qarnot.exceptions.UnauthorizedException: invalid credentials
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
-        resp = self._get(get_url('user'))
+        resp = self._get(get_url("user"))
         raise_on_error(resp)
         ret = resp.json()
         return UserInfo(ret)
@@ -293,7 +311,7 @@ class Connection(object):
         :raises qarnot.exceptions.UnauthorizedException: invalid credentials
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
-        response = self._get(get_url('disk folder'))
+        response = self._get(get_url("disk folder"))
         raise_on_error(response)
         disks = [Disk.from_json(self, data) for data in response.json()]
         return disks
@@ -307,7 +325,7 @@ class Connection(object):
         :raises qarnot.exceptions.UnauthorizedException: invalid credentials
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
-        response = self._get(get_url('tasks'))
+        response = self._get(get_url("tasks"))
         raise_on_error(response)
         return [Task.from_json(self, task) for task in response.json()]
 
@@ -322,9 +340,9 @@ class Connection(object):
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
 
-        response = self._get(get_url('task update', uuid=uuid))
+        response = self._get(get_url("task update", uuid=uuid))
         if response.status_code == 404:
-            raise MissingTaskException(response.json()['message'])
+            raise MissingTaskException(response.json()["message"])
         raise_on_error(response)
         return Task.from_json(self, response.json())
 
@@ -367,9 +385,9 @@ class Connection(object):
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
 
-        response = self._get(get_url('disk info', name=uuid))
+        response = self._get(get_url("disk info", name=uuid))
         if response.status_code == 404:
-            raise MissingDiskException(response.json()['message'])
+            raise MissingDiskException(response.json()["message"])
         raise_on_error(response)
         return Disk.from_json(self, response.json())
 
@@ -414,12 +432,12 @@ class Connection(object):
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
 
-        url = get_url('profiles')
+        url = get_url("profiles")
         response = self._get(url)
         raise_on_error(response)
         profiles_list = []
         for p in response.json():
-            url = get_url('profile details', profile=p)
+            url = get_url("profile details", profile=p)
             response2 = self._get(url)
             if response2.status_code == 404:
                 continue
@@ -435,11 +453,11 @@ class Connection(object):
         :raises qarnot.exceptions.QarnotGenericException: API general error, see message for details
         """
 
-        url = get_url('profile details', profile=name)
+        url = get_url("profile details", profile=name)
         response = self._get(url)
         raise_on_error(response)
         if response.status_code == 404:
-            raise QarnotGenericException(response.json()['message'])
+            raise QarnotGenericException(response.json()["message"])
         return Profile(response.json())
 
 
@@ -447,48 +465,49 @@ class Connection(object):
 # utility Classes #
 ###################
 
+
 class UserInfo(object):
     """Information about a qarnot user."""
 
     def __init__(self, info):
-        self.email = info.get('email', '')
+        self.email = info.get("email", "")
         """:type: :class:`str`
 
         User email address."""
 
-        self.disk_count = info['diskCount']
+        self.disk_count = info["diskCount"]
         """:type: :class:`int`
 
         Number of disks owned by the user."""
-        self.max_disk = info['maxDisk']
+        self.max_disk = info["maxDisk"]
         """:type: :class:`int`
 
         Maximum number of disks allowed (resource and result disks)."""
-        self.quota_bytes = info['quotaBytes']
+        self.quota_bytes = info["quotaBytes"]
         """:type: :class:`int`
 
         Total storage space allowed for the user's disks (in Bytes)."""
-        self.used_quota_bytes = info['usedQuotaBytes']
+        self.used_quota_bytes = info["usedQuotaBytes"]
         """:type: :class:`int`
 
         Total storage space used by the user's disks (in Bytes)."""
-        self.task_count = info['taskCount']
+        self.task_count = info["taskCount"]
         """:type: :class:`int`
 
         Total number of tasks belonging to the user."""
-        self.max_task = info['maxTask']
+        self.max_task = info["maxTask"]
         """:type: :class:`int`
 
         Maximum number of tasks the user is allowed to create."""
-        self.running_task_count = info['runningTaskCount']
+        self.running_task_count = info["runningTaskCount"]
         """:type: :class:`int`
 
         Number of tasks currently in 'Submitted' state."""
-        self.max_running_task = info['maxRunningTask']
+        self.max_running_task = info["maxRunningTask"]
         """:type: :class:`int`
 
         Maximum number of running tasks."""
-        self.max_instances = info['maxInstances']
+        self.max_instances = info["maxInstances"]
         """:type: :class:`int`
 
         Maximum number of instances."""
@@ -496,17 +515,18 @@ class UserInfo(object):
 
 class Profile(object):
     """Information about a profile."""
+
     def __init__(self, info):
-        self.name = info['name']
+        self.name = info["name"]
         """:type: :class:`str`
 
         Name of the profile."""
-        self.constants = tuple((cst['name'], cst['value'])
-                               for cst in info['constants'])
+        self.constants = tuple((cst["name"], cst["value"]) for cst in info["constants"])
         """:type: List of (:class:`str`, :class:`str`)
 
         List of couples (name, value) representing constants for this profile
         and their default values."""
 
     def __repr__(self):
-        return 'Profile(name=%s, constants=%r}' % (self.name, self.constants)
+        return "Profile(name=%s, constants=%r}" % (self.name, self.constants)
+

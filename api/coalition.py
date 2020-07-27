@@ -1,28 +1,26 @@
 # -*- coding: utf-8 -*-
 
-import httplib, urllib, json, sys
+import http.client, urllib, json, sys
 
 
 class CoalitionError(Exception):
-	pass
-
-
+    pass
 
 
 class Connection(object):
-	"""A connection to the coalition server.
+    """A connection to the coalition server.
 
 	:param str host: The coalition server hostname.
 	:param int port: The coalition server port.
 	"""
 
-	def __init__(self, host='localhost', port=19211):
-		"""Setup http connection."""
-		self.IntoWith = False
-		self._Conn = httplib.HTTPConnection (host, port)
+    def __init__(self, host="localhost", port=19211):
+        """Setup http connection."""
+        self.IntoWith = False
+        self._Conn = http.client.HTTPConnection(host, port)
 
-	def _send (self, method, command, params=None):
-		"""Send message to server.
+    def _send(self, method, command, params=None):
+        """Send message to server.
 		
 		:param str method: Http request method between "GET", "PUT", "POST" and "DELETE".
 		:param str command: REST api URL.
@@ -31,20 +29,33 @@ class Connection(object):
 		:rtype: str or :class:CoalitionError
 		"""
 
-		if params:
-			params = json.dumps (params)
-		headers = {'Content-Type': 'application/json'}
-		self._Conn.request (method, command, params, headers)
-		res = self._Conn.getresponse()
-		if res.status == 200:
-			return res.read ()
-		else:
-			raise CoalitionError (res.read())
+        if params:
+            params = json.dumps(params)
+        headers = {"Content-Type": "application/json"}
+        self._Conn.request(method, command, params, headers)
+        res = self._Conn.getresponse()
+        if res.status == 200:
+            return res.read()
+        else:
+            raise CoalitionError(res.read())
 
-	def newJob(self, parent=0, title='', command='', dir='', environment='',
-			state="WAITING", paused=False, priority=1000, timeout=0,
-			affinity='', user='', progress_pattern='', dependencies=[]):
-		"""Create a :class:`Job`.
+    def newJob(
+        self,
+        parent=0,
+        title="",
+        command="",
+        dir="",
+        environment="",
+        state="WAITING",
+        paused=False,
+        priority=1000,
+        timeout=0,
+        affinity="",
+        user="",
+        progress_pattern="",
+        dependencies=[],
+    ):
+        """Create a :class:`Job`.
 
 		:param int parent: The parent :class:`Job` id.
 		:param str title: The :class:`Job` title.
@@ -61,36 +72,36 @@ class Connection(object):
 		:return: The :class:`Job` id.
 		:rtype: int
 		"""
-				
-		params = locals().copy ()
-		del params['self']
-		res = self._send ("PUT", '/api/jobs', params)
-		return int(res)
 
-	def getJob (self, id):
-		"""Get a :class:`Job` instance.
+        params = locals().copy()
+        del params["self"]
+        res = self._send("PUT", "/api/jobs", params)
+        return int(res)
+
+    def getJob(self, id):
+        """Get a :class:`Job` instance.
 
 		:param int id: The id of the :class:`Job`.
 		:return: A :class:`Job` instance.
 		:rtype: :class:`Job`
 		"""
 
-		res = self._send('GET', '/api/jobs/' + str(id))
-		return Job (json.loads(res), self)
+        res = self._send("GET", "/api/jobs/" + str(id))
+        return Job(json.loads(res), self)
 
-	def getJobChildren (self, id):
-		"""Get :class:`Job` children instances.
+    def getJobChildren(self, id):
+        """Get :class:`Job` children instances.
 
 		:param int id: The parent :class:`Job` id.
 		:return: The list of children :class:`Job` instances.
 		:rtype: list(:class:`Job`)
 		"""
 
-		res = self._send('GET', '/api/jobs/{id}/children'.format(id=id))
-		return [Job(r, self) for r in json.loads(res)]
+        res = self._send("GET", "/api/jobs/{id}/children".format(id=id))
+        return [Job(r, self) for r in json.loads(res)]
 
-	def getJobDependencies (self, id):
-		"""Get the :class:`Job` dependencies.
+    def getJobDependencies(self, id):
+        """Get the :class:`Job` dependencies.
 		Alternatively, the dependencies attribute of a :class:`Job` contains the list
 		of dependent jobs ids.
 
@@ -99,92 +110,92 @@ class Connection(object):
 		:rtype: list(:class:`Job`)
 		"""
 
-		res = self._send('GET', '/api/jobs/{}/dependencies'.format(id))
-		return [Job(r, self) for r in json.loads(res)]
+        res = self._send("GET", "/api/jobs/{}/dependencies".format(id))
+        return [Job(r, self) for r in json.loads(res)]
 
-	def setJobDependencies (self, id, ids):
-		'''Set the :class:`Job` objects on which a job has a dependency.
+    def setJobDependencies(self, id, ids):
+        """Set the :class:`Job` objects on which a job has a dependency.
 		Alternatively, one can set the dependencies attribute of a Job.
 
 		:param id int: the id of the job with dependencies
 		:param ids [int]: the list of job.id (int) on which the job depends
-		'''
-		res = self._send ("POST", '/api/jobs/'+str(id)+'/dependencies', ids)
-		return res
+		"""
+        res = self._send("POST", "/api/jobs/" + str(id) + "/dependencies", ids)
+        return res
 
-	def setAffinities( self, data ):
-		'''Set the affinities.
+    def setAffinities(self, data):
+        """Set the affinities.
 		Affinities need to be set before they can be assigned to :class:`Job` or Worker.
 
 		:param data: a dictionnary of affinities
-		'''
-		res = self._send( "POST", "/api/affinities", data )
-		return res
+		"""
+        res = self._send("POST", "/api/affinities", data)
+        return res
 
-	def getAffinities( self ):
-		'''Get the affinities.
+    def getAffinities(self):
+        """Get the affinities.
 		Affinities need to be set before they can be assigned to :class:`Job` or Worker.
 
 		:param data: a dictionnary of affinities
-		'''
+		"""
 
-		res = self._send( "GET", "/api/affinities" )
-		res = json.loads( res )
-		return res
+        res = self._send("GET", "/api/affinities")
+        res = json.loads(res)
+        return res
 
-	def getWorkers ( self ):
-		'''Returns the :class:`Worker` objects.
+    def getWorkers(self):
+        """Returns the :class:`Worker` objects.
 		Workers are identified by an index.
 
 		:rtype: the list of :class:`Worker` objects.
-		'''
+		"""
 
-		res = self._send ("GET", '/api/workers')
-		res = json.loads( res )
-		return res
+        res = self._send("GET", "/api/workers")
+        res = json.loads(res)
+        return res
 
-	def editWorkers( self, workers ):
-		'''Set the :class:`Worker` objects.
+    def editWorkers(self, workers):
+        """Set the :class:`Worker` objects.
 		All the workers' attributes are updated.
 
 		:param data: a dictionnary of workers.
-		'''
+		"""
 
-		res = self._send( "POST", '/api/workers', workers )
-		return res
+        res = self._send("POST", "/api/workers", workers)
+        return res
 
-	def __enter__(self):
-		self.Jobs = {}
-		self.Workers = {}
-		self.IntoWith = True
+    def __enter__(self):
+        self.Jobs = {}
+        self.Workers = {}
+        self.IntoWith = True
 
-	def __exit__(self, type, value, traceback):
-		self.IntoWith = False
-		
-		# Convert an object in dict
-		def convobj (o):
-			d = o.__dict__.copy()
-			del d['Conn']
-			return d
+    def __exit__(self, type, value, traceback):
+        self.IntoWith = False
 
-		if not isinstance(value, TypeError):
-			if len(self.Jobs) > 0:
-				self._send ("POST", '/api/jobs', self.Jobs)
-			if len(self.Workers) > 0:
-				self._send ("POST", '/api/workers', self.Workers)
+        # Convert an object in dict
+        def convobj(o):
+            d = o.__dict__.copy()
+            del d["Conn"]
+            return d
+
+        if not isinstance(value, TypeError):
+            if len(self.Jobs) > 0:
+                self._send("POST", "/api/jobs", self.Jobs)
+            if len(self.Workers) > 0:
+                self._send("POST", "/api/workers", self.Workers)
 
 
 class Job(object):
-	'''A job object returned by the :class:`Connection`. Don't create such objects yourself.
+    """A job object returned by the :class:`Connection`. Don't create such objects yourself.
 	Job properties should be modified into a Connection with block. Don't modify the id or the state properties directly.
-	'''
+	"""
 
-	def __init__ (self, d, conn):
-		assert (conn)
-		self.Conn = False
-		self.__dict__.update (d)
-		self.Conn = conn
-		""":var int id: the job id
+    def __init__(self, d, conn):
+        assert conn
+        self.Conn = False
+        self.__dict__.update(d)
+        self.Conn = conn
+        """:var int id: the job id
 		:var int parent: the parent job id
 		:var str title: the job title
 		:var str command: the job command to execute, or an empty string if the job is a parent node.
@@ -214,21 +225,19 @@ class Job(object):
 		:var str progress_pattern: a regexp pattern which filters the logs and return the progression. The pattern must include a '%percent' or a '%one' keyword.
 		"""
 
-	def __setattr__(self, attr, value):
-		if attr != "Conn" and self.Conn:
-			if self.Conn.IntoWith:
-				w = self.Conn.Jobs.get(self.id)
-				if not w:
-					w = {}
-					self.Conn.Jobs[self.id] = w
-				w[attr] = value
-			else:
-				raise CoalitionError("Can't write attributes outside a connection block")
-		super(Job, self).__setattr__(attr, value)
-
-
-class CoalitionError(Exception):
-	pass
+    def __setattr__(self, attr, value):
+        if attr != "Conn" and self.Conn:
+            if self.Conn.IntoWith:
+                w = self.Conn.Jobs.get(self.id)
+                if not w:
+                    w = {}
+                    self.Conn.Jobs[self.id] = w
+                w[attr] = value
+            else:
+                raise CoalitionError(
+                    "Can't write attributes outside a connection block"
+                )
+        super(Job, self).__setattr__(attr, value)
 
 
 # vim: tabstop=4 noexpandtab shiftwidth=4 softtabstop=4 textwidth=79

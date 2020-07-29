@@ -4,21 +4,20 @@
 """
 Coalition server.
 """
-
 from twisted.web import xmlrpc, server, static, http
-from twisted.internet import defer, reactor, interfaces
+from twisted.internet import reactor, interfaces
 from twisted.web.server import Session
 import time, os, getopt, sys, base64, re, configparser, random, shutil
 import _pickle as cPickle
 import _thread as thread
-
+import requests
 import atexit, json
 import smtplib
 from email.mime.text import MIMEText
 from textwrap import dedent, fill
 
-import sqlite3
-import pymysql
+from db_sqlite import DBSQLite
+from db_mysql import DBMySQL
 from ldap3.core.exceptions import LDAPExceptionError
 from ldap3 import SUBTREE, Server, Connection, ALL
 
@@ -252,8 +251,6 @@ def grantAddJob(user, cmd):
         return False
 
     # Is user defined white list ?
-    # Is user defined white list ?
-    # Is user defined white list ?
     if user in UserCmdWhiteList:
         wl = UserCmdWhiteList[user]
         if checkWhiteList(wl):
@@ -282,7 +279,7 @@ def listenUDP():
     s.bind(("0.0.0.0", port))
     while 1:
         try:
-            data, addr = s.recvfrom(1024)
+            addr = s.recvfrom(1024)
             s.sendto("roxor", addr)
         except:
             pass
@@ -291,19 +288,20 @@ def listenUDP():
 def main():
     """Start the UDP server used for the broadcast."""
     thread.start_new_thread(listenUDP, ())
-
-    from twisted.internet.interfaces import IReactorTCP
+    from twisted.internet import interfaces
     from twisted.web import server
 
     root = Root("public_html")
     webService = Master()
     workers = Workers()
-    root.putChild("xmlrpc", webService)
-    root.putChild("api", webService)
-    root.putChild("workers", workers)
+    root.putChild(b"xmlrpc", webService)
+    root.putChild(b"api", webService)
+    root.putChild(b"workers", workers)
     vprint("[Init] Listen on port " + str(port))
-    IReactorTCP.listenTCP(port, server.Site(root))
-    IReactorTCP.run()
+    reactor.listenTCP(port, server.Site(root))
+    reactor.run()
+    # interfaces.IReactorTCP.listenTCP(port, server.Site(root))
+    # interfaces.IReactorTCP.run()
 
 
 ### Classes ###
@@ -351,7 +349,7 @@ def ldapUserAllowed(user, action):
 
 def isWebFrontend(request):
     """Check if the request comes from the webfrontend."""
-    m = re.match(r"^/api/webfrontend/", request.path)
+    m = re.match(b"^/api/webfrontend/", request.path)
     if m:
         return True
     else:
@@ -394,7 +392,7 @@ class Master(xmlrpc.XMLRPC):
             vprint("[{}] {}".format(request.method, request.path))
             if isWebFrontend(request):
                 (authenticated, permissions) = authenticate(request, ldap_permissions)
-                request.path = request.path.replace("webfrontend/", "", 1)
+                request.path = request.path.replace(b"webfrontend/", b"", 1)
             else:
                 authenticated = True
                 permissions = ldap_permissions
@@ -407,7 +405,7 @@ class Master(xmlrpc.XMLRPC):
                     return value[0]
 
                 # The legacy method for compatibility
-                if request.path == "/xmlrpc/addjob":
+                if request.path == b"/xmlrpc/addjob":
                     parent = getArg("parent", "0")
                     title = getArg("title", "New job")
                     cmd = getArg("cmd", getArg("command", ""))
@@ -460,9 +458,7 @@ class Master(xmlrpc.XMLRPC):
                     try:
                         value = request.content.getvalue()
                         if request.method != "GET":
-                            data = (
-                                value and json.loads(request.content.getvalue()) or {}
-                            )
+                            data = value and json.loads(value) or {}
                             if verbose:
                                 vprint("[Content] {}".format(repr(data)))
                         else:
@@ -488,11 +484,12 @@ class Master(xmlrpc.XMLRPC):
                                 return value
 
                         def api_rest():
+                            print("API_REST")
                             """REST API."""
 
                             # REST PUT API
-                            if request.method == "PUT":
-                                if request.path == "/api/jobs":
+                            if request.method == b"PUT":
+                                if request.path == b"/api/jobs":
                                     if grantAddJob(
                                         self.user, getChildArg("command", "")
                                     ):
@@ -507,8 +504,6 @@ class Master(xmlrpc.XMLRPC):
                                             (getChildArg("timeout", 1000)),
                                             (getChildArg("priority", 1000)),
                                             (getChildArg("affinity", "")),
-                                            (getChildArg("affinity", "")),
-                                            (getChildArg("affinity", "")),
                                             (getChildArg("user", "")),
                                             (getChildArg("url", "")),
                                             (getChildArg("progress_pattern", "")),
@@ -519,114 +514,127 @@ class Master(xmlrpc.XMLRPC):
                                         return False
 
                             # REST GET API
-                            elif request.method == "GET":
-                                m = re.match(r"^/api/jobs/(\d+)$", request.path)
+                            elif request.method == b"GET":
+                                m = re.match(
+                                    r"^/api/jobs/(\d+)$", request.path.decode("utf-8")
+                                )
                                 if m:
                                     return db.getJob(int(m.group(1)))
                                 m = re.match(
-                                    r"^/api/jobs/(\d+)/children$", request.path
+                                    r"^/api/jobs/(\d+)/children$",
+                                    request.path.decode("utf-8"),
                                 )
                                 if m:
                                     return db.getJobChildren(int(m.group(1)), {})
                                 m = re.match(
-                                    r"^/api/jobs/(\d+)/dependencies$", request.path
+                                    r"^/api/jobs/(\d+)/dependencies$",
+                                    request.path.decode("utf-8"),
                                 )
                                 if m:
                                     return db.getJobDependencies(int(m.group(1)))
                                 m = re.match(
                                     r"^/api/jobs/(\d+)/childrendependencies$",
-                                    request.path,
+                                    request.path.decode("utf-8"),
                                 )
                                 if m:
                                     return db.getChildrenDependencyIds(int(m.group(1)))
-                                m = re.match(r"^/api/jobs/(\d+)/log$", request.path)
+                                m = re.match(
+                                    r"^/api/jobs/(\d+)/log$",
+                                    request.path.decode("utf-8"),
+                                )
                                 if m:
                                     return self.getLog(int(m.group(1)))
-                                if request.path == "/api/jobs":
+                                if request.path == b"/api/jobs":
                                     return db.getJobChildren(0, {})
 
-                                m = re.match(r"^/api/jobs/count/where/$", request.path)
+                                m = re.match(
+                                    r"^/api/jobs/count/where/$",
+                                    request.path.decode("utf-8"),
+                                )
                                 if m:
                                     return db.getCountJobsWhere(
-                                        request.args["where_clause"]
+                                        request.args[b"where_clause"]
                                     )
 
-                                m = re.match(r"^/api/jobs/where/$", request.path)
+                                m = re.match(
+                                    r"^/api/jobs/where/$", request.path.decode("utf-8")
+                                )
                                 if m:
                                     return db.getJobsWhere(
-                                        where_clause=request.args["where_clause"][0],
-                                        index_min=request.args["min"][0],
-                                        index_max=request.args["max"][0],
+                                        where_clause=request.args[b"where_clause"][0],
+                                        index_min=request.args[b"min"][0],
+                                        index_max=request.args[b"max"][0],
                                     )
 
-                                if request.path == "/api/workers":
+                                if request.path == b"/api/workers":
                                     return db.getWorkers()
-                                if request.path == "/api/events":
+                                if request.path == b"/api/events":
                                     return db.getEvents(
                                         getChildArg("job", -1),
                                         getChildArg("worker", ""),
                                         getChildArg("howlong", -1),
                                     )
-                                if request.path == "/api/affinities":
+                                if request.path == b"/api/affinities":
                                     return db.getAffinities()
 
-                            if request.path == "/api/jobs/users/":
+                            if request.path == b"/api/jobs/users/":
                                 return db.getJobsUsers()
 
-                            if request.path == "/api/jobs/states/":
+                            if request.path == b"/api/jobs/states/":
                                 return db.getJobsStates()
 
-                            if request.path == "/api/jobs/workers/":
+                            if request.path == b"/api/jobs/workers/":
                                 return db.getJobsWorkers()
 
-                            if request.path == "/api/jobs/priorities/":
+                            if request.path == b"/api/jobs/priorities/":
                                 return db.getJobsPriorities()
 
-                            if request.path == "/api/jobs/affinities/":
+                            if request.path == b"/api/jobs/affinities/":
                                 return db.getJobsAffinities()
 
                             # REST POST API
-                            elif request.method == "POST":
-                                if request.path == "/api/jobs":
+                            elif request.method == b"POST":
+                                if request.path == b"/api/jobs":
                                     db.editJobs(data)
                                     return 1
-                                if request.path == "/api/workers":
+                                if request.path == b"/api/workers":
                                     db.editWorkers(data)
                                     return 1
                                 m = re.match(
-                                    r"^/api/jobs/(\d+)/dependencies$", request.path
+                                    r"^/api/jobs/(\d+)/dependencies$",
+                                    request.path.decode("utf-8"),
                                 )
                                 if m:
                                     db.setJobDependencies(int(m.group(1)), data)
                                     return 1
-                                if request.path == "/api/resetjobs":
+                                if request.path == b"/api/resetjobs":
                                     for jobId in data:
                                         db.resetJob(int(jobId))
                                     return 1
-                                if request.path == "/api/reseterrorjobs":
+                                if request.path == b"/api/reseterrorjobs":
                                     for jobId in data:
                                         db.resetErrorJob(int(jobId))
                                     return 1
-                                if request.path == "/api/startjobs":
+                                if request.path == b"/api/startjobs":
                                     for jobId in data:
                                         db.startJob(int(jobId))
                                     return 1
-                                if request.path == "/api/pausejobs":
+                                if request.path == b"/api/pausejobs":
                                     for jobId in data:
                                         db.pauseJob(int(jobId))
                                     return 1
-                                if request.path == "/api/stopworkers":
+                                if request.path == b"/api/stopworkers":
                                     for name in data:
                                         db.stopWorker(name)
                                     return 1
-                                if request.path == "/api/startworkers":
+                                if request.path == b"/api/startworkers":
                                     for name in data:
                                         db.startWorker(name)
                                     return 1
-                                if request.path == "/api/affinities":
+                                if request.path == b"/api/affinities":
                                     db.setAffinities(data)
                                     return 1
-                                if request.path == "/api/terminateworkers":
+                                if request.path == b"/api/terminateworkers":
                                     if servermode != "normal":  # Cloud mode
                                         for name in data:
                                             db.cloudmanager.stopInstance(name)
@@ -636,15 +644,15 @@ class Master(xmlrpc.XMLRPC):
                                         return None
 
                             # REST DELETE API
-                            elif request.method == "DELETE":
-                                if request.path == "/api/jobs":
+                            elif request.method == b"DELETE":
+                                if request.path == b"/api/jobs":
                                     for jobId in data:
                                         deletedJobs = []
                                         db.deleteJob(int(jobId), deletedJobs)
                                         for deleteJobId in deletedJobs:
                                             self.deleteLog(deleteJobId)
                                     return 1
-                                if request.path == "/api/workers":
+                                if request.path == b"/api/workers":
                                     for name in data:
                                         db.deleteWorker(name)
                                     return 1
@@ -652,7 +660,8 @@ class Master(xmlrpc.XMLRPC):
                         result = api_rest()
                         if result != None:
                             # Only JSON right now
-                            return json.dumps(result)
+                            print("DEBBUG:", result)
+                            return json.dumps(result).encode("utf-8")
                         else:
                             # return server.NOT_DONE_YET
                             request.setResponseCode(404)
@@ -698,7 +707,7 @@ class Workers(xmlrpc.XMLRPC):
                 value = request.args.get(name, [default])
                 return value[0]
 
-            if request.path == "/workers/heartbeat":
+            if request.path == b"/workers/heartbeat":
                 return self.json_heartbeat(
                     getWorkersArg("hostname", ""),
                     getWorkersArg("jobId", "-1"),
@@ -708,7 +717,7 @@ class Workers(xmlrpc.XMLRPC):
                     getWorkersArg("total_memory", "0"),
                     request.getClientIP(),
                 )
-            elif request.path == "/workers/pickjob":
+            elif request.path == b"/workers/pickjob":
                 return self.json_pickjob(
                     getWorkersArg("hostname", ""),
                     getWorkersArg("load", "[0]"),
@@ -716,7 +725,7 @@ class Workers(xmlrpc.XMLRPC):
                     getWorkersArg("total_memory", "0"),
                     request.getClientIP(),
                 )
-            elif request.path == "/workers/endjob":
+            elif request.path == b"/workers/endjob":
                 return self.json_endjob(
                     getWorkersArg("hostname", ""),
                     getWorkersArg("jobId", "1"),
@@ -937,7 +946,7 @@ else:
 # Init the good database
 if cfgStr("db_type", "sqlite") == "mysql":
     vprint("[Init] Use mysql")
-    db = pymysql.connect(
+    db = DBMySQL(
         cfgStr("db_mysql_host", "127.0.0.1"),
         cfgStr("db_mysql_user", ""),
         cfgStr("db_mysql_password", ""),
@@ -947,13 +956,12 @@ if cfgStr("db_type", "sqlite") == "mysql":
     )
 else:
     vprint("[Init] Use sqlite3")
-    db = sqlite3.connect(
-        cfgStr("sqlite3_file", "coalition.db"), config=config, cloudconfig=cloudconfig
+    db = DBSQLite(
+        cfgStr("db_sqlite_file", "coalition.db"), config=config, cloudconfig=cloudconfig
     )
 db.NotifyError = notifyError
 db.NotifyFinished = notifyFinished
 db.Verbose = verbose
-
 if initdb:
     vprint("[Init] Initial database setup")
     if not db.initDatabase():
@@ -1057,6 +1065,5 @@ else:
     # Simple server
     if __name__ == "__main__":
         main()
-
 # vim: tabstop=4 noexpandtab shiftwidth=4 softtabstop=4 textwidth=79
 

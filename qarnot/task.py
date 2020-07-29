@@ -23,28 +23,15 @@ import sys
 
 from qarnot import disk
 from qarnot import get_url, raise_on_error
-from exceptions import *
-
+from qarnot.exceptions import *
 try:
-    from progressbar import (
-        AnimatedMarker,
-        Bar,
-        ETA,
-        Percentage,
-        AdaptiveETA,
-        ProgressBar,
-    )
+    from progressbar import AnimatedMarker, Bar, ETA, Percentage, AdaptiveETA, ProgressBar
 except:
     pass
 
-RUNNING_DOWNLOADING_STATES = [
-    "Submitted",
-    "PartiallyDispatched",
-    "FullyDispatched",
-    "PartiallyExecuting",
-    "FullyExecuting",
-    "DownloadingResults",
-]
+RUNNING_DOWNLOADING_STATES = ['Submitted', 'PartiallyDispatched',
+                              'FullyDispatched', 'PartiallyExecuting',
+                              'FullyExecuting', 'DownloadingResults']
 
 
 class Task(object):
@@ -55,7 +42,6 @@ class Task(object):
        :meth:`qarnot.connection.Connection.create_task`
        or retrieved with :meth:`qarnot.connection.Connection.tasks` or :meth:`qarnot.connection.Connection.retrieve_task`.
     """
-
     def __init__(self, connection, name, profile, instancecount_or_range):
         """Create a new :class:`Task`.
 
@@ -104,7 +90,7 @@ class Task(object):
         """
 
         self.constraints = {}
-        self._state = "UnSubmitted"  # RO property same for below
+        self._state = 'UnSubmitted'  # RO property same for below
         self._uuid = None
         self._snapshots = False
         self._dirty = False
@@ -135,19 +121,13 @@ class Task(object):
         :raises qarnot.exceptions.UnauthorizedException: invalid credentials
         :raises qarnot.exceptions.MissingTaskException: no such task
         """
-        resp = connection._get(get_url("task update", uuid=uuid))
+        resp = connection._get(get_url('task update', uuid=uuid))
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
         raise_on_error(resp)
         return Task.from_json(connection, resp.json())
 
-    def run(
-        self,
-        output_dir=None,
-        job_timeout=None,
-        live_progress=False,
-        results_progress=None,
-    ):
+    def run(self, output_dir=None, job_timeout=None, live_progress=False, results_progress=None):
         """Submit a task, wait for the results and download them if required.
 
         :param str output_dir: (optional) path to a directory that will contain the results
@@ -177,9 +157,7 @@ class Task(object):
         if output_dir is not None:
             self.download_results(output_dir, progress=results_progress)
 
-    def resume(
-        self, output_dir, job_timeout=None, live_progress=False, results_progress=None
-    ):
+    def resume(self, output_dir, job_timeout=None, live_progress=False, results_progress=None):
         """Resume waiting for this task if it is still in submitted mode.
         Equivalent to :meth:`wait` + :meth:`download_results`.
 
@@ -223,19 +201,19 @@ class Task(object):
         for rdisk in self.resources:
             rdisk.flush()
         payload = self._to_json()
-        resp = self._connection._post(get_url("tasks"), json=payload)
+        resp = self._connection._post(get_url('tasks'), json=payload)
 
         if resp.status_code == 404:
-            raise disk.MissingDiskException(resp.json()["message"])
+            raise disk.MissingDiskException(resp.json()['message'])
         elif resp.status_code == 403:
-            if resp.json()["message"].startswith("Maximum number of disks reached"):
-                raise MaxDiskException(resp.json()["message"])
+            if resp.json()['message'].startswith('Maximum number of disks reached'):
+                raise MaxDiskException(resp.json()['message'])
             else:
-                raise MaxTaskException(resp.json()["message"])
+                raise MaxTaskException(resp.json()['message'])
         elif resp.status_code == 402:
-            raise NotEnoughCreditsException(resp.json()["message"])
+            raise NotEnoughCreditsException(resp.json()['message'])
         raise_on_error(resp)
-        self._uuid = resp.json()["uuid"]
+        self._uuid = resp.json()['uuid']
 
         if not isinstance(self._snapshots, bool):
             self.snapshot(self._snapshots)
@@ -251,10 +229,11 @@ class Task(object):
         """
         self.update(True)
 
-        resp = self._connection._post(get_url("task abort", uuid=self._uuid))
+        resp = self._connection._post(
+            get_url('task abort', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
         raise_on_error(resp)
 
         self.update(True)
@@ -268,10 +247,11 @@ class Task(object):
         """
 
         self.update(True)
-        resp = self._connection._patch(get_url("task update", uuid=self._uuid))
+        resp = self._connection._patch(
+            get_url('task update', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
         raise_on_error(resp)
 
         self.update(True)
@@ -307,9 +287,10 @@ class Task(object):
             except disk.MissingDiskException as exception:
                 purge_results = False
 
-        resp = self._connection._delete(get_url("task update", uuid=self._uuid))
+        resp = self._connection._delete(
+            get_url('task update', uuid=self._uuid))
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
         raise_on_error(resp)
 
         if purge_resources:
@@ -319,10 +300,7 @@ class Task(object):
                     rdisk.update()
                     rdisk.delete()
                     toremove.append(rdisk)
-                except (
-                    disk.MissingDiskException,
-                    disk.LockedDiskException,
-                ) as exception:
+                except (disk.MissingDiskException, disk.LockedDiskException) as exception:
                     warnings.warn(str(exception))
             for tr in toremove:
                 rdisks.remove(tr)
@@ -359,9 +337,10 @@ class Task(object):
         if (now - self._last_cache) < self._update_cache_time and not flushcache:
             return
 
-        resp = self._connection._get(get_url("task update", uuid=self._uuid))
+        resp = self._connection._get(
+            get_url('task update', uuid=self._uuid))
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
         self._update(resp.json())
@@ -369,39 +348,37 @@ class Task(object):
 
     def _update(self, json_task):
         """Update this task from retrieved info."""
-        self._name = json_task["name"]
-        self._profile = json_task["profile"]
-        self._instancecount = json_task.get("instanceCount")
-        self._advanced_range = json_task.get("advancedRanges")
-        self._resource_disks_uuids = json_task["resourceDisks"]
+        self._name = json_task['name']
+        self._profile = json_task['profile']
+        self._instancecount = json_task.get('instanceCount')
+        self._advanced_range = json_task.get('advancedRanges')
+        self._resource_disks_uuids = json_task['resourceDisks']
         if len(self._resource_disks_uuids) != len(self._resource_disks):
             del self._resource_disks[:]
-        self._result_disk_uuid = json_task["resultDisk"]
-        if "status" in json_task:
-            self._status = json_task["status"]
-        self._creation_date = datetime.datetime.strptime(
-            json_task["creationDate"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        if "errors" in json_task:
-            self._errors = [Error(d) for d in json_task["errors"]]
+        self._result_disk_uuid = json_task['resultDisk']
+        if 'status' in json_task:
+            self._status = json_task['status']
+        self._creation_date = datetime.datetime.strptime(json_task['creationDate'], "%Y-%m-%dT%H:%M:%SZ")
+        if 'errors' in json_task:
+            self._errors = [Error(d) for d in json_task['errors']]
         else:
             self._errors = []
-        for constant in json_task["constants"]:
-            self.constants[constant.get("key")] = constant.get("value")
-        self._uuid = json_task["uuid"]
-        self._state = json_task["state"]
-        self._tags = json_task.get("tags", None)
-        if self._rescount < json_task["resultsCount"]:
+        for constant in json_task['constants']:
+            self.constants[constant.get('key')] = constant.get('value')
+        self._uuid = json_task['uuid']
+        self._state = json_task['state']
+        self._tags = json_task.get('tags', None)
+        if self._rescount < json_task['resultsCount']:
             self._dirty = True
-        self._rescount = json_task["resultsCount"]
-        if "resultsBlacklist" in json_task:
-            self._results_blacklist = json_task["resultsBlacklist"]
-        if "resultsWhitelist" in json_task:
-            self._results_whitelist = json_task["resultsWhitelist"]
-        if "snapshotWhitelist" in json_task:
-            self._snapshot_whitelist = json_task["snapshotWhitelist"]
-        if "snapshotBlacklist" in json_task:
-            self._snapshot_blacklist = json_task["snapshotBlacklist"]
+        self._rescount = json_task['resultsCount']
+        if 'resultsBlacklist' in json_task:
+            self._results_blacklist = json_task['resultsBlacklist']
+        if 'resultsWhitelist' in json_task:
+            self._results_whitelist = json_task['resultsWhitelist']
+        if 'snapshotWhitelist' in json_task:
+            self._snapshot_whitelist = json_task['snapshotWhitelist']
+        if 'snapshotBlacklist' in json_task:
+            self._snapshot_blacklist = json_task['snapshotBlacklist']
 
     @classmethod
     def from_json(cls, connection, json_task):
@@ -411,13 +388,14 @@ class Task(object):
         :param dict json_task: Dictionary representing the task
         :returns: The created :class:`~qarnot.task.Task`.
         """
-        if "instanceCount" in json_task:
-            instancecount_or_range = json_task["instanceCount"]
+        if 'instanceCount' in json_task:
+            instancecount_or_range = json_task['instanceCount']
         else:
-            instancecount_or_range = json_task["advancedRanges"]
-        new_task = cls(
-            connection, json_task["name"], json_task["profile"], instancecount_or_range
-        )
+            instancecount_or_range = json_task['advancedRanges']
+        new_task = cls(connection,
+                       json_task['name'],
+                       json_task['profile'],
+                       instancecount_or_range)
         new_task._update(json_task)
         return new_task
 
@@ -430,10 +408,10 @@ class Task(object):
         .. note:: When updating disks' properties, auto update will be disabled until commit is called.
         """
         data = self._to_json()
-        resp = self._connection._put(get_url("task update", uuid=self._uuid), json=data)
+        resp = self._connection._put(get_url('task update', uuid=self._uuid), json=data)
         self._auto_update = self._last_auto_update_state
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
 
@@ -459,12 +437,9 @@ class Task(object):
             try:
                 widgets = [
                     Percentage(),
-                    " ",
-                    AnimatedMarker(),
-                    " ",
-                    Bar(),
-                    " ",
-                    AdaptiveETA(),
+                    ' ', AnimatedMarker(),
+                    ' ', Bar(),
+                    ' ', AdaptiveETA()
                 ]
                 progressbar = ProgressBar(widgets=widgets, max_value=100)
             except Exception as e:
@@ -487,9 +462,7 @@ class Task(object):
                     n += 1
                     if n >= nap:
                         break
-                    progress = (
-                        self.status.execution_progress if self.status is not None else 0
-                    )
+                    progress = self.status.execution_progress if self.status is not None else 0
                     progress = max(0, min(progress, 100))
                     progressbar.update(progress)
             else:
@@ -529,14 +502,13 @@ class Task(object):
         if self._uuid is None:
             self._snapshots = interval
             return
-        resp = self._connection._post(
-            get_url("task snapshot", uuid=self._uuid), json={"interval": interval}
-        )
+        resp = self._connection._post(get_url('task snapshot', uuid=self._uuid),
+                                      json={"interval": interval})
 
         if resp.status_code == 400:
             raise ValueError(interval)
         elif resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
 
@@ -554,12 +526,11 @@ class Task(object):
         if self._uuid is None:
             return
 
-        resp = self._connection._post(
-            get_url("task instant", uuid=self._uuid), json=None
-        )
+        resp = self._connection._post(get_url('task instant', uuid=self._uuid),
+                                      json=None)
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
         raise_on_error(resp)
 
         self.update(True)
@@ -604,7 +575,8 @@ class Task(object):
 
         if not self._resource_disks:
             for duuid in self._resource_disks_uuids:
-                d = disk.Disk._retrieve(self._connection, duuid)
+                d = disk.Disk._retrieve(self._connection,
+                                        duuid)
                 self._resource_disks.append(d)
 
         return self._resource_disks
@@ -622,9 +594,8 @@ class Task(object):
 
         Represents results files."""
         if self._result_disk is None:
-            self._result_disk = disk.Disk._retrieve(
-                self._connection, self._result_disk_uuid
-            )
+            self._result_disk = disk.Disk._retrieve(self._connection,
+                                                    self._result_disk_uuid)
 
         if self._auto_update:
             self.update()
@@ -675,10 +646,11 @@ class Task(object):
         """
         if self._uuid is None:
             return ""
-        resp = self._connection._get(get_url("task stdout", uuid=self._uuid))
+        resp = self._connection._get(
+            get_url('task stdout', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
 
@@ -697,10 +669,11 @@ class Task(object):
         """
         if self._uuid is None:
             return ""
-        resp = self._connection._post(get_url("task stdout", uuid=self._uuid))
+        resp = self._connection._post(
+            get_url('task stdout', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
         return resp.text
@@ -721,10 +694,11 @@ class Task(object):
         """
         if self._uuid is None:
             return ""
-        resp = self._connection._get(get_url("task stderr", uuid=self._uuid))
+        resp = self._connection._get(
+            get_url('task stderr', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
         return resp.text
@@ -742,10 +716,11 @@ class Task(object):
         """
         if self._uuid is None:
             return ""
-        resp = self._connection._post(get_url("task stderr", uuid=self._uuid))
+        resp = self._connection._post(
+            get_url('task stderr', uuid=self._uuid))
 
         if resp.status_code == 404:
-            raise MissingTaskException(resp.json()["message"])
+            raise MissingTaskException(resp.json()['message'])
 
         raise_on_error(resp)
         return resp.text
@@ -842,9 +817,7 @@ class Task(object):
             raise AttributeError("can't set attribute on a launched task")
 
         if self.advanced_range is not None:
-            raise AttributeError(
-                "Can't set instancecount if advanced_range is not None"
-            )
+            raise AttributeError("Can't set instancecount if advanced_range is not None")
         self._instancecount = value
 
     @property
@@ -857,7 +830,7 @@ class Task(object):
 
         Allows to select which instances will be computed.
         Should be None or match the following extended regular expression
-        """ r"""**"([0-9]+|[0-9]+-[0-9]+)(,([0-9]+|[0-9]+-[0-9]+))+"**
+        """r"""**"([0-9]+|[0-9]+-[0-9]+)(,([0-9]+|[0-9]+-[0-9]+))+"**
         eg: 1,3-8,9,12-19
 
         Can be set until :meth:`run` is called.
@@ -1036,51 +1009,52 @@ class Task(object):
     def _to_json(self):
         """Get a dict ready to be json packed from this task."""
         const_list = [
-            {"key": key, "value": value} for key, value in self.constants.items()
+            {'key': key, 'value': value}
+            for key, value in self.constants.items()
         ]
         constr_list = [
-            {"key": key, "value": value} for key, value in self.constraints.items()
+            {'key': key, 'value': value}
+            for key, value in self.constraints.items()
         ]
 
         self._resource_disks_uuids = [x.uuid for x in self._resource_disks]
         json_task = {
-            "name": self._name,
-            "profile": self._profile,
-            "resourceDisks": self._resource_disks_uuids,
-            "constants": const_list,
-            "constraints": constr_list,
+            'name': self._name,
+            'profile': self._profile,
+            'resourceDisks': self._resource_disks_uuids,
+            'constants': const_list,
+            'constraints': constr_list
         }
 
         if self._result_disk is not None:
-            json_task["resultDisk"] = self._result_disk.uuid
+            json_task['resultDisk'] = self._result_disk.uuid
 
         if self._advanced_range is not None:
-            json_task["advancedRanges"] = self._advanced_range
+            json_task['advancedRanges'] = self._advanced_range
         else:
-            json_task["instanceCount"] = self._instancecount
+            json_task['instanceCount'] = self._instancecount
 
         json_task["tags"] = self._tags
 
         if self._snapshot_whitelist is not None:
-            json_task["snapshotWhitelist"] = self._snapshot_whitelist
+            json_task['snapshotWhitelist'] = self._snapshot_whitelist
         if self._snapshot_blacklist is not None:
-            json_task["snapshotBlacklist"] = self._snapshot_blacklist
+            json_task['snapshotBlacklist'] = self._snapshot_blacklist
         if self._results_whitelist is not None:
-            json_task["resultsWhitelist"] = self._results_whitelist
+            json_task['resultsWhitelist'] = self._results_whitelist
         if self._results_blacklist is not None:
-            json_task["resultsBlacklist"] = self._results_blacklist
+            json_task['resultsBlacklist'] = self._results_blacklist
         return json_task
 
     def __str__(self):
-        return "{0} - {1} - {2} - InstanceCount : {3} - {4} - Resources : {5} - Results : {6}".format(
-            self.name,
-            self._uuid,
-            self._profile,
-            self._instancecount,
-            self.state,
-            (self._resource_disks_uuids if self._resource_disks is not None else ""),
-            (self._result_disk.uuid if self._result_disk is not None else ""),
-        )
+        return '{0} - {1} - {2} - InstanceCount : {3} - {4} - Resources : {5} - Results : {6}'\
+            .format(self.name,
+                    self._uuid,
+                    self._profile,
+                    self._instancecount,
+                    self.state,
+                    (self._resource_disks_uuids if self._resource_disks is not None else ""),
+                    (self._result_disk.uuid if self._result_disk is not None else ""))
 
     # Context manager
     def __enter__(self):
@@ -1097,32 +1071,27 @@ class Error(object):
 
     .. note:: Read-only class
     """
-
     def __init__(self, json):
-        self.code = json["code"]
+        self.code = json['code']
         """:type: :class:`str`
 
         Error code."""
 
-        self.message = json["message"]
+        self.message = json['message']
         """:type: :class:`str`
 
         Error message."""
 
-        self.debug = json["debug"]
+        self.debug = json['debug']
         """:type: :class:`str`
 
         Optional extra debug information"""
 
     def __str__(self):
         if sys.version_info > (3, 0):
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.items()
-            )
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.items())
         else:
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems()
-            )  # pylint: disable=no-member
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems())  # pylint: disable=no-member
 
 
 # Status
@@ -1131,64 +1100,63 @@ class TaskStatus(object):
 
     .. note:: Read-only class
     """
-
     def __init__(self, json):
-        self.download_progress = json["downloadProgress"]
+        self.download_progress = json['downloadProgress']
         """:type: :class:`float`
 
         Resources download progress to the instances."""
 
-        self.execution_progress = json["executionProgress"]
+        self.execution_progress = json['executionProgress']
         """:type: :class:`float`
 
         Task execution progress."""
 
-        self.upload_progress = json["uploadProgress"]
+        self.upload_progress = json['uploadProgress']
         """:type: :class:`float`
 
         Task results upload progress to the API."""
 
-        self.instance_count = json["instanceCount"]
+        self.instance_count = json['instanceCount']
         """:type: :class:`int`
 
         Number of running instances."""
 
-        self.download_time = json["downloadTime"]
+        self.download_time = json['downloadTime']
         """:type: :class:`str`
 
         Resources download time to the instances."""
 
-        self.download_time_sec = json["downloadTimeSec"]
+        self.download_time_sec = json['downloadTimeSec']
         """:type: :class:`float`
 
         Resources download time to the instances in seconds."""
 
-        self.environment_time = json["environmentTime"]
+        self.environment_time = json['environmentTime']
         """:type: :class:`str`
 
         Environment time to the instances."""
 
-        self.environment_time_sec = json["environmentTimeSec"]
+        self.environment_time_sec = json['environmentTimeSec']
         """:type: :class:`float`
 
         Environment time to the instances in seconds."""
 
-        self.execution_time = json["executionTime"]
+        self.execution_time = json['executionTime']
         """:type: :class:`str`
 
         Task execution time."""
 
-        self.execution_time_sec = json["executionTimeSec"]
+        self.execution_time_sec = json['executionTimeSec']
         """:type: :class:`float`
 
         Task execution time in seconds."""
 
-        self.upload_time = json["uploadTime"]
+        self.upload_time = json['uploadTime']
         """:type: :class:`str`
 
         Task results upload time to the API."""
 
-        self.upload_time_sec = json["uploadTimeSec"]
+        self.upload_time_sec = json['uploadTimeSec']
         """:type: :class:`float`
 
         Task results upload time to the API in seconds."""
@@ -1203,17 +1171,17 @@ class TaskStatus(object):
 
         Wall time of the task in seconds."""
 
-        self.succeeded_range = json["succeededRange"]
+        self.succeeded_range = json['succeededRange']
         """:type: :class:`str`
 
         Successful instances range."""
 
-        self.executed_range = json["executedRange"]
+        self.executed_range = json['executedRange']
         """:type: :class:`str`
 
         Executed instances range."""
 
-        self.failed_range = json["failedRange"]
+        self.failed_range = json['failedRange']
         """:type: :class:`str`
 
         Failed instances range."""
@@ -1223,20 +1191,14 @@ class TaskStatus(object):
 
         Running instances information."""
 
-        if "runningInstancesInfo" in json and json["runningInstancesInfo"] is not None:
-            self.running_instances_info = RunningInstancesInfo(
-                json["runningInstancesInfo"]
-            )
+        if 'runningInstancesInfo' in json and json['runningInstancesInfo'] is not None:
+            self.running_instances_info = RunningInstancesInfo(json['runningInstancesInfo'])
 
     def __str__(self):
         if sys.version_info > (3, 0):
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.items()
-            )
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.items())
         else:
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems()
-            )  # pylint: disable=no-member
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems())  # pylint: disable=no-member
 
 
 class TaskActiveForward(object):
@@ -1244,33 +1206,27 @@ class TaskActiveForward(object):
 
     .. note:: Read-only class
     """
-
     def __init__(self, json):
-        self.application_port = json["applicationPort"]
+        self.application_port = json['applicationPort']
         """:type: :class:`int`
 
         Application Port."""
 
-        self.forwarder_port = json["forwarderPort"]
+        self.forwarder_port = json['forwarderPort']
         """:type: :class:`int`
 
         Forwarder Port."""
 
-        self.forwarder_host = json["forwarderHost"]
+        self.forwarder_host = json['forwarderHost']
         """:type: :class:`str`
 
         Forwarder Host."""
 
         def __str__(self):
             if sys.version_info > (3, 0):
-                return ", ".join(
-                    "{0}={1}".format(key, val) for (key, val) in self.__dict__.items()
-                )
+                return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.items())
             else:
-                return ", ".join(
-                    "{0}={1}".format(key, val)
-                    for (key, val) in self.__dict__.iteritems()
-                )  # pylint: disable=no-member
+                return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems())  # pylint: disable=no-member
 
 
 class RunningInstancesInfo(object):
@@ -1278,90 +1234,80 @@ class RunningInstancesInfo(object):
 
     .. note:: Read-only class
     """
-
     def __init__(self, json):
         self.per_running_instance_info = []
         """:type: list(:class:`PerRunningInstanceInfo`)
 
         Per running instances information."""
 
-        if (
-            "perRunningInstanceInfo" in json
-            and json["perRunningInstanceInfo"] is not None
-        ):
-            self.per_running_instance_info = [
-                PerRunningInstanceInfo(x) for x in json["perRunningInstanceInfo"]
-            ]
+        if 'perRunningInstanceInfo' in json and json['perRunningInstanceInfo'] is not None:
+            self.per_running_instance_info = [PerRunningInstanceInfo(x) for x in json['perRunningInstanceInfo']]
 
-        self.timestamp = json["timestamp"]
+        self.timestamp = json['timestamp']
         """:type: :class:`str`
 
         Last information update timestamp."""
 
-        self.average_frequency_ghz = json["averageFrequencyGHz"]
+        self.average_frequency_ghz = json['averageFrequencyGHz']
         """:type: :class:`float`
 
         Average Frequency in GHz."""
 
-        self.max_frequency_ghz = json["maxFrequencyGHz"]
+        self.max_frequency_ghz = json['maxFrequencyGHz']
         """:type: :class:`float`
 
         Maximum Frequency in GHz."""
 
-        self.min_frequency_ghz = json["minFrequencyGHz"]
+        self.min_frequency_ghz = json['minFrequencyGHz']
         """:type: :class:`float`
 
         Minimum Frequency in GHz."""
 
-        self.average_max_frequency_ghz = json["averageMaxFrequencyGHz"]
+        self.average_max_frequency_ghz = json['averageMaxFrequencyGHz']
         """:type: :class:`float`
 
         Average Maximum Frequency in GHz."""
 
-        self.average_cpu_usage = json["averageCpuUsage"]
+        self.average_cpu_usage = json['averageCpuUsage']
         """:type: :class:`float`
 
         Average CPU Usage."""
 
-        self.cluster_power_indicator = json["clusterPowerIndicator"]
+        self.cluster_power_indicator = json['clusterPowerIndicator']
         """:type: :class:`float`
 
         Cluster Power Indicator."""
 
-        self.average_memory_usage = json["averageMemoryUsage"]
+        self.average_memory_usage = json['averageMemoryUsage']
         """:type: :class:`float`
 
         Average Memory Usage."""
 
-        self.average_network_in_kbps = json["averageNetworkInKbps"]
+        self.average_network_in_kbps = json['averageNetworkInKbps']
         """:type: :class:`float`
 
         Average Network Input in Kbps."""
 
-        self.average_network_out_kbps = json["averageNetworkOutKbps"]
+        self.average_network_out_kbps = json['averageNetworkOutKbps']
         """:type: :class:`float`
 
         Average Network Output in Kbps."""
 
-        self.total_network_in_kbps = json["totalNetworkInKbps"]
+        self.total_network_in_kbps = json['totalNetworkInKbps']
         """:type: :class:`float`
 
         Total Network Input in Kbps."""
 
-        self.total_network_out_kbps = json["totalNetworkOutKbps"]
+        self.total_network_out_kbps = json['totalNetworkOutKbps']
         """:type: :class:`float`
 
         Total Network Output in Kbps."""
 
     def __str__(self):
         if sys.version_info > (3, 0):
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.items()
-            )
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.items())
         else:
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems()
-            )  # pylint: disable=no-member
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems())  # pylint: disable=no-member
 
 
 class PerRunningInstanceInfo(object):
@@ -1369,74 +1315,73 @@ class PerRunningInstanceInfo(object):
 
     .. note:: Read-only class
     """
-
     def __init__(self, json):
-        self.phase = json["phase"]
+        self.phase = json['phase']
         """:type: :class:`str`
 
         Instance phase."""
 
-        self.instance_id = json["instanceId"]
+        self.instance_id = json['instanceId']
         """:type: :class:`int`
 
         Instance number."""
 
-        self.max_frequency_ghz = json["maxFrequencyGHz"]
+        self.max_frequency_ghz = json['maxFrequencyGHz']
         """:type: :class:`float`
 
         Maximum CPU frequency in GHz."""
 
-        self.current_frequency_ghz = json["currentFrequencyGHz"]
+        self.current_frequency_ghz = json['currentFrequencyGHz']
         """:type: :class:`float`
 
         Current CPU frequency in GHz."""
 
-        self.cpu_usage = json["cpuUsage"]
+        self.cpu_usage = json['cpuUsage']
         """:type: :class:`float`
 
         Current CPU usage."""
 
-        self.max_memory_mb = json["maxMemoryMB"]
+        self.max_memory_mb = json['maxMemoryMB']
         """:type: :class:`int`
 
         Maximum memory size in MB."""
 
-        self.current_memory_mb = json["currentMemoryMB"]
+        self.current_memory_mb = json['currentMemoryMB']
         """:type: :class:`int`
 
         Current memory size in MB."""
 
-        self.memory_usage = json["memoryUsage"]
+        self.memory_usage = json['memoryUsage']
         """:type: :class:`float`
 
         Current memory usage."""
 
-        self.network_in_kbps = json["networkInKbps"]
+        self.network_in_kbps = json['networkInKbps']
         """:type: :class:`float`
 
         Network Input in Kbps."""
 
-        self.network_out_kbps = json["networkOutKbps"]
+        self.network_out_kbps = json['networkOutKbps']
         """:type: :class:`float`
 
         Network Output in Kbps."""
 
-        self.progress = json["progress"]
+        self.progress = json['progress']
         """:type: :class:`float`
 
         Instance progress."""
 
-        self.execution_time_sec = json["executionTimeSec"]
+        self.execution_time_sec = json['executionTimeSec']
         """:type: :class:`float`
 
         Instance execution time in seconds."""
 
-        self.execution_time_ghz = json["executionTimeGHz"]
+        self.execution_time_ghz = json['executionTimeGHz']
         """:type: :class:`float`
 
         Instance execution time GHz"""
 
-        self.cpu_model = json["cpuModel"]
+        self.cpu_model = json['cpuModel']
         """:type: :class:`str`
 
         CPU model"""
@@ -1446,16 +1391,11 @@ class PerRunningInstanceInfo(object):
 
         Active forwards list."""
 
-        if "activeForwards" in json:
-            self.active_forward = [TaskActiveForward(x) for x in json["activeForwards"]]
+        if 'activeForwards' in json:
+            self.active_forward = [TaskActiveForward(x) for x in json['activeForwards']]
 
     def __str__(self):
         if sys.version_info > (3, 0):
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.items()
-            )
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.items())
         else:
-            return ", ".join(
-                "{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems()
-            )  # pylint: disable=no-member
-
+            return ', '.join("{0}={1}".format(key, val) for (key, val) in self.__dict__.iteritems())  # pylint: disable=no-member

@@ -16,7 +16,7 @@ def convdata(d):
         or (
             isinstance(d, bool)
             and (d and "1" or "0")
-            or (isinstance(d, unicode) and repr(str(d)) or str(d))
+            or (isinstance(d, str) and repr(str(d)) or str(d))
         )
     )
 
@@ -458,7 +458,9 @@ class DBSQL(DB):
         self._execute(
             cur,
             "SELECT * FROM Jobs WHERE {} LIMIT {},{}".format(
-                where_clause.decode("utf-8"), index_min, index_max,
+                where_clause.decode("utf-8"),
+                index_min.decode("utf-8"),
+                index_max.decode("utf-8"),
             ),
         )
         return [self._rowAsDict(cur, row) for row in cur.fetchall()]
@@ -569,11 +571,11 @@ class DBSQL(DB):
         for row in cur:
             worker = self._rowAsDict(cur, row)
             try:
-                info = self.Workers[worker["name"]]
-                worker["ping_time"] = info["ping_time"]
-                worker["cpu"] = info["cpu"]
-                worker["free_memory"] = info["free_memory"]
-                worker["total_memory"] = info["total_memory"]
+                info = self.Workers[worker[b"name"]]
+                worker[b"ping_time"] = info[b"ping_time"]
+                worker[b"cpu"] = info[b"cpu"]
+                worker[b"free_memory"] = info[b"free_memory"]
+                worker[b"total_memory"] = info[b"total_memory"]
             except:
                 pass
 
@@ -1096,7 +1098,8 @@ class DBSQL(DB):
         # get the worker active and state
         self._execute(
             cur,
-            "SELECT active, state, last_job FROM Workers WHERE name = '%s'" % hostname,
+            "SELECT active, state, last_job FROM Workers WHERE name = '%s'"
+            % hostname.decode("utf-8"),
         )
         worker = cur.fetchone()
         if worker is None:
@@ -1116,14 +1119,14 @@ class DBSQL(DB):
             self._execute(
                 cur,
                 "SELECT id FROM Jobs WHERE state = 'WORKING' and worker = '%s'"
-                % hostname,
+                % hostname.decode("utf-8"),
             )
             for job in cur:
                 self._setJobState(job[0], "WAITING", True)
 
         # worker is not active, drop now
         if not worker[0]:
-            return -1, "", "", "", None
+            return -1, b"", b"", b"", None
 
         # Here, we have an INNER JOIN query
         # Fetch the FIRST job whose affinity match the worker's first affinity in the list (stored in WorkerAffinities)
@@ -1140,15 +1143,13 @@ class DBSQL(DB):
 			AND NOT J.h_paused
 			AND J.command != ''
 			ORDER BY W.ordering ASC, J.h_priority DESC, J.id ASC LIMIT 1""".format(
-                    hostname
+                    hostname.decode("utf-8")
                 )
             ),
         )
-
         job = (
             cur.fetchone()
         )  # This instruction is redundant because there is a LIMIT 1 in the query
-
         # At this point, the job will be set to None IF :
         # * There is no Worker whose affinity match any Job affinity
         # * A job has no affinity
@@ -1168,7 +1169,6 @@ class DBSQL(DB):
 				ORDER BY h_priority DESC, id ASC LIMIT 1"""
                 ),
             )
-
             job = cur.fetchone()
 
             # Finally, return nothing if there is no job.
@@ -1180,7 +1180,7 @@ class DBSQL(DB):
                         hostname
                     ),
                 )
-                return -1, "", "", "", None
+                return -1, b"", b"", b"", None
 
         # update the job and worker
         id = job[0]
@@ -1190,35 +1190,53 @@ class DBSQL(DB):
             cur,
             "INSERT INTO Events (worker, job_id, job_title, state, start, duration) "
             "VALUES (%s, %d, %s, 'WORKING', %d, %d)"
-            % (convdata(hostname), job[0], convdata(job[1]), current_time, 0),
+            % (
+                convdata(hostname.decode("utf-8")),
+                job[0],
+                convdata(job[1]),
+                current_time,
+                0,
+            ),
         )
         cur.fetchone()
         eventid = cur.lastrowid
-
         self._execute(
             cur,
             "UPDATE Jobs SET worker = '%s', start_time = %d, duration = 0, progress = 0.0 "
-            "WHERE id = %d" % (hostname, current_time, id),
+            "WHERE id = %d" % (hostname.decode("utf-8"), current_time, id),
         )
         self._execute(
             cur,
             "UPDATE Workers SET last_job = %d, state = 'WORKING', current_event = %d "
-            "WHERE name = '%s'" % (id, eventid, hostname),
+            "WHERE name = '%s'" % (id, eventid, hostname.decode("utf-8")),
         )
 
         self._setJobState(id, "WORKING", True)
-
         if job[4] != None and job[4] != "":
-            return job[0], job[2], job[3], job[4], job[5]
+            return (
+                job[0],
+                job[2].encode("utf-8"),
+                job[3].encode("utf-8"),
+                job[4].encode("utf-8"),
+                job[5].encode("utf-8"),
+            )
         else:
-            return job[0], job[2], job[3], "", job[5]
+            return (
+                job[0],
+                job[2].encode("utf-8"),
+                job[3].encode("utf-8"),
+                b"",
+                job[5].encode("utf-8"),
+            )
 
     def endJob(self, hostname, jobId, errorCode, ip):
+        print("----------------END JOB")
         current_time = int(time.time())
         cur = self.Conn.cursor()
         self._execute(
             cur,
-            "SELECT active, current_event FROM Workers WHERE name = '%s'" % hostname,
+            "SELECT active, current_event FROM Workers WHERE name = '%s'"
+            % hostname.decode("utf-8"),
         )
         worker = cur.fetchone()
         if worker is None:

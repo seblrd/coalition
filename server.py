@@ -422,8 +422,6 @@ class Master(xmlrpc.XMLRPC):
                     user = getArg("user", "")
                     state = getArg("state", "WAITING")
                     paused = getArg("paused", "0")
-                    if self.user != "":
-                        user = self.user
 
                     if grantAddJob(self.user, cmd):
                         vprint("Add job: {}".format(cmd))
@@ -701,36 +699,43 @@ class Workers(xmlrpc.XMLRPC):
 
     def render(self, request):
         with db:
-            vprint("[" + request.method + "] " + request.path)
+            vprint(
+                "["
+                + request.method.decode("utf-8")
+                + "] "
+                + request.path.decode("utf-8")
+            )
 
             def getWorkersArg(name, default):
                 value = request.args.get(name, [default])
                 return value[0]
 
             if request.path == b"/workers/heartbeat":
+                print("--------------heartbeat")
                 return self.json_heartbeat(
-                    getWorkersArg("hostname", ""),
+                    getWorkersArg(b"hostname", b""),
                     getWorkersArg("jobId", "-1"),
                     getWorkersArg("log", ""),
                     getWorkersArg("load", "[0]"),
                     getWorkersArg("free_memory", "0"),
                     getWorkersArg("total_memory", "0"),
-                    request.getClientIP(),
+                    request.getClientAddress(),
                 )
             elif request.path == b"/workers/pickjob":
                 return self.json_pickjob(
-                    getWorkersArg("hostname", ""),
+                    getWorkersArg(b"hostname", b""),
                     getWorkersArg("load", "[0]"),
                     getWorkersArg("free_memory", "0"),
                     getWorkersArg("total_memory", "0"),
-                    request.getClientIP(),
+                    request.getClientAddress(),
                 )
             elif request.path == b"/workers/endjob":
+                print("--------------endjob")
                 return self.json_endjob(
-                    getWorkersArg("hostname", ""),
+                    getWorkersArg(b"hostname", b""),
                     getWorkersArg("jobId", "1"),
                     getWorkersArg("errorCode", "0"),
-                    request.getClientIP(),
+                    request.getClientAddress(),
                 )
             else:
                 # return server.NOT_DONE_YET
@@ -770,12 +775,14 @@ class Workers(xmlrpc.XMLRPC):
         return result and "true" or "false"
 
     def json_pickjob(self, hostname, load, free_memory, total_memory, ip):
-        return str(
-            db.pickJob(hostname, load, int(free_memory), int(total_memory), str(ip))
-        )
+        print(db.pickJob(hostname, load, int(free_memory), int(total_memory), str(ip)),)
+        return db.pickJob(hostname, load, int(free_memory), int(total_memory), str(ip))
 
     def json_endjob(self, hostname, jobId, errorCode, ip):
-        return str(db.endJob(hostname, int(jobId), int(errorCode), str(ip)))
+        print("ENDJOB")
+        return str(
+            db.endJob(hostname.decode("utf-8"), int(jobId), int(errorCode), str(ip))
+        )
 
 
 GErr = 0

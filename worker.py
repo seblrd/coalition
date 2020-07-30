@@ -5,7 +5,10 @@
 Coalition worker.
 """
 
-import socket, time, subprocess, thread, getopt, sys, os, base64, signal, string, re, platform, ConfigParser, httplib, urllib, datetime, threading
+import socket, time, subprocess, getopt, sys, os, base64, signal, string, re, platform, urllib, datetime, threading
+import _thread as thread
+import configparser as ConfigParser
+import http.client as httplib
 import random
 from sys import modules
 from os.path import splitext, abspath
@@ -33,11 +36,12 @@ serverUrl = ""
 workers = 1
 cpus = None
 startup = ""
-service = __name__ != "__main__" and sys.platform == "win32"
+service = False
+if __name__ != "__main__" and sys.platform == "win32":
+    service = True
 install = False
 Headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain"}
 Event = threading.Event()
-
 # Go to the script directory
 global coalitionDir
 if sys.platform == "win32":
@@ -59,7 +63,7 @@ else:
 os.chdir(coalitionDir)
 
 # Read the config file
-config = ConfigParser.SafeConfigParser()
+config = ConfigParser.ConfigParser()
 config.read("coalition.ini")
 
 
@@ -231,9 +235,8 @@ def workerRun(worker, func, retry):
         try:
             serverConn = httplib.HTTPConnection(re.sub("^http://", "", serverUrl))
             result = func(serverConn)
-            serverConn.close()
             return result
-        except (socket.error, httplib.HTTPException), err:
+        except (socket.error, httplib.HTTPException) as err:
             print("Error sending to the server : ", str(err))
             pass
         if serverConn != None:
@@ -286,8 +289,8 @@ class Worker:
                 result = ""
             return result
 
-        while re.search("\$\(([^)]*)\)", _str):
-            _str = re.sub("\$\(([^)]*)\)", _getenv, _str)
+        while re.search(r"\$\(([^)]*)\)", _str):
+            _str = re.sub(r"\$\(([^)]*)\)", _getenv, _str)
         return _str
 
     # Add to the logs
@@ -307,10 +310,8 @@ class Worker:
 
         # Special command ?
         if runcommand != "":
-            cmd = string.replace(
-                string.replace(
-                    string.replace(runcommand, "__user__", user), "__dir__", dir
-                ),
+            cmd = str.replace(
+                str.replace(str.replace(runcommand, "__user__", user), "__dir__", dir),
                 "__cmd__",
                 cmd,
             )
@@ -321,14 +322,14 @@ class Worker:
                     if sys.platform != "win32":
                         dir = re.sub("\\\\", "/", dir)
                     os.chdir(dir)
-                except OSError, err:
+                except OSError as err:
                     self.info("ERROR : Can't change dir to " + dir + ": " + str(err))
 
         # Run the job
         self.info("CMD : " + cmd)
 
         # Make sure
-        os.umask(002)
+        os.umask(0o02)
         process = subprocess.Popen(
             cmd,
             shell=True,
@@ -396,7 +397,7 @@ class Worker:
                 try:
                     f = open("/proc/" + name + "/stat", "r")
                     line = f.readline()
-                    words = string.split(line)
+                    words = str.split(line)
                     if words[3] == str(pid):
                         vprint("Found in " + name)
                         self.killr(int(name))
@@ -414,11 +415,9 @@ class Worker:
                 )
             elif runcommand != "":
                 killcmd = "kill -9 " + str(pid)
-                cmd = string.replace(
-                    string.replace(
-                        string.replace(runcommand, "__user__", self.User),
-                        "__dir__",
-                        ".",
+                cmd = str.replace(
+                    str.replace(
+                        str.replace(runcommand, "__user__", self.User), "__dir__", ".",
                     ),
                     "__cmd__",
                     killcmd,
@@ -450,7 +449,7 @@ class Worker:
 
             self.LogLock.acquire()
             try:
-                params = urllib.urlencode(
+                params = urllib.parse.urlencode(
                     {
                         "hostname": self.Name,
                         "jobId": jobId,
@@ -480,9 +479,9 @@ class Worker:
         vprint("Ask for a job")
         # Function to ask a job to the server
         def startFunc(serverConn):
-            params = urllib.urlencode(
+            params = urllib.parse.urlencode(
                 {
-                    "hostname": self.Name,
+                    "hostname": self.Name.encode("utf-8"),
                     "load": self.workerGetLoadAvg(),
                     "free_memory": int(host_mem.getAvailableMem() / 1024 / 1024),
                     "total_memory": int(self.total_memory / 1024 / 1024),
@@ -491,11 +490,15 @@ class Worker:
             serverConn.request("POST", "/workers/pickjob", params, Headers)
             response = serverConn.getresponse()
             result = response.read()
-            return eval(result)
+            print("----------------------DEBUG result", result)
+            return result
 
         # Block until this message to handled by the server
+        print(
+            "--------------------Worker run start func",
+            workerRun(self, startFunc, True),
+        )
         jobId, cmd, dir, user, env = workerRun(self, startFunc, True)
-
         if jobId != -1:
             self.Log = ""
 
@@ -554,7 +557,7 @@ class Worker:
 
             # Function to end the job
             def endFunc(serverConn):
-                params = urllib.urlencode(
+                params = urllib.parse.urlencode(
                     {
                         "hostname": self.Name,
                         "jobId": jobId,
@@ -568,6 +571,7 @@ class Worker:
             # Block until this message to handled by the server
             workerRun(self, endFunc, True)
         else:
+            print("DEBUG")
             time.sleep(shuffleSleepTime(sleepTime))
 
 
@@ -601,9 +605,12 @@ def main():
         while gogogo:
             try:
                 vprint("Broadcast port " + str(broadcastPort))
-                s.sendto("coalition", ("255.255.255.255", broadcastPort))
+                s.sendto(
+                    "coalition".encode("utf-8"), ("255.255.255.255", broadcastPort)
+                )
                 data, addr = s.recvfrom(1024)
-                if data == "roxor":
+                print("--------DATA", data)
+                if data == b"roxor":
                     serverUrl = "http://" + addr[0] + ":" + str(broadcastPort)
                     print("Server found at " + serverUrl)
                     vprint("Found : " + serverUrl)
